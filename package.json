@@ -1,0 +1,24 @@
+{
+  "name": "plumirecord",
+  "version": "1.0.0",
+  "description": "Record an animated Claude Design page (or any HTML) to a social-ready mp4. No dependencies.",
+  "keywords": ["claude-design", "screen-recording", "mp4", "headless-chrome", "cdp", "ffmpeg", "animation", "video"],
+  "license": "MIT",
+  "author": "Arthur Adanzin",
+  "homepage": "https://github.com/THRAUR/PlumiRecord#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/THRAUR/PlumiRecord.git" },
+  "bugs": { "url": "https://github.com/THRAUR/PlumiRecord/issues" },
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "bin": {
+    "plumirecord": "bin/plumirecord.mjs",
+    "plumirecord-server": "bin/plumirecord-server.mjs"
+  },
+  "exports": { ".": "./src/recorder.mjs" },
+  "files": ["bin", "src", "public", "README.md", "LICENSE"],
+  "scripts": {
+    "start": "node bin/plumirecord-server.mjs",
+    "test": "node --test",
+    "doctor": "node bin/plumirecord.mjs --doctor"
+  }
+}

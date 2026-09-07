@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- A stand-in for a Claude Design export, small enough to render in CI.
+     It carries the two things the real thing does: an artboard marked with
+     data-screen-label, and a loop that is exactly 2s long so --detect has a
+     right answer to be checked against. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PlumiRecord test slide</title>
+<style>
+  body { margin: 0; background: #b8b2a4; font-family: ui-monospace, monospace; }
+  #slide {
+    width: 360px; height: 450px; background: #f4f1e9; color: #2b2724;
+    border: 2px solid #2b2724; display: grid; place-content: center; gap: 18px;
+  }
+  .dot {
+    width: 64px; height: 64px; border-radius: 50%; background: #e0915e;
+    margin: 0 auto; animation: bob 2s linear infinite;
+  }
+  .bar { width: 180px; height: 10px; background: #ded8ca; overflow: hidden; }
+  .bar i { display: block; width: 100%; height: 100%; background: #2b2724; animation: sweep 2s linear infinite; }
+  @keyframes bob { 0%, 100% { transform: translateY(-18px); } 50% { transform: translateY(18px); } }
+  @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  h1 { font-size: 15px; letter-spacing: 2px; margin: 0; text-align: center; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div id="slide" data-screen-label="Test slide">
+    <div class="dot"></div>
+    <div class="bar"><i></i></div>
+    <h1 id="label">plumirecord</h1>
+  </div>
+  <script>
+    /* The reveal a real deck does with a timer, so the stepped clock shim has
+       something scheduled to prove it drives. */
+    setTimeout(() => { document.getElementById('label').textContent = 'ready'; }, 900);
+  </script>
+</body>
+</html>

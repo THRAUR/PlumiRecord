@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>PlumiRecord</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="/app.webmanifest">
+<meta name="theme-color" content="#e6e1d5">
+<meta name="apple-mobile-web-app-title" content="PlumiRecord">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #e6e1d5; --card: #f4f1e9; --plate: #ded8ca;
+    --ink: #2b2724; --muted: #7a7268; --line: #cec7b8;
+    --terra: #e0915e; --terra-ink: #a85f2d; --ok: #4f7a4a; --bad: #b4442f;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --pixel: "Silkscreen", var(--mono);
+    --gate: min(52vh, 440px);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; padding: 22px; background: var(--paper); color: var(--ink);
+    font: 15px/1.55 Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--terra-ink); }
+  :focus-visible { outline: 2px solid var(--terra-ink); outline-offset: 2px; }
+
+  /* ---- the window ---------------------------------------------------- */
+  .shell {
+    max-width: 1240px; margin: 0 auto; background: var(--card);
+    border: 2px solid var(--ink); border-radius: 6px;
+    box-shadow: 6px 6px 0 rgba(43,39,36,.16); overflow: hidden;
+  }
+  .titlebar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 7px 12px;
+    border-bottom: 2px solid var(--ink);
+    background: repeating-linear-gradient(to bottom, rgba(43,39,36,.20) 0 1px, transparent 1px 3px);
+  }
+  .titlebar img { width: 17px; height: 17px; display: block; border-radius: 4px; }
+  .titlebar h1 {
+    font: 400 16px/1 var(--pixel); letter-spacing: .5px; margin: 0;
+    background: var(--card); padding: 4px 9px 3px;
+  }
+  .src { margin-left: auto; display: flex; align-items: center; gap: 8px; background: var(--card); padding: 3px 4px 3px 9px; max-width: 52%; }
+  .src #srcname { font: 500 12px/1.3 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 84px; }
+  /* Selects take the full width by default, which starves the name beside them. */
+  .src select { flex: 0 1 220px; min-width: 110px; }
+
+  .panes { display: grid; grid-template-columns: 184px minmax(0,1fr) 252px; align-items: stretch; }
+  .rail, .side { padding: 16px 14px; }
+  .rail { border-right: 1px solid var(--line); }
+  .side { border-left: 1px solid var(--line); background: rgba(43,39,36,.025); }
+  .stage { padding: 20px; min-width: 0; }
+  h2 { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+
+  /* Three things can be on the stage: the way in, the contents of a fresh upload,
+     and the slide you are working on. Only one of them at a time, and the slide rail
+     belongs to the last of the three. */
+  body[data-phase="empty"] .rail, body[data-phase="pick"] .rail { display: none; }
+  body[data-phase="empty"] .panes, body[data-phase="pick"] .panes { grid-template-columns: minmax(0,1fr) 252px; }
+  body:not([data-phase="empty"]) .intro { display: none; }
+  body:not([data-phase="pick"]) .pick { display: none; }
+  body[data-phase="empty"] .work, body[data-phase="pick"] .work { display: none; }
+  body[data-phase="empty"] .stage { min-height: 540px; }
+
+  /* ---- controls ------------------------------------------------------- */
+  input[type=text], input[type=number], select {
+    font: 400 13px/1.2 var(--mono); color: var(--ink); background: #fdfcf9;
+    border: 1.5px solid var(--line); border-radius: 3px; padding: 8px 10px; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(224,145,94,.22); }
+  label { display: block; font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+
+  button {
+    font: 500 12px/1 var(--mono); letter-spacing: .06em; color: var(--ink);
+    background: transparent; border: 1.5px solid var(--line); border-radius: 3px;
+    padding: 9px 14px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--ink); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.go {
+    font: 400 16px/1 var(--pixel); letter-spacing: .5px; color: #fff;
+    background: var(--terra); border: 2px solid var(--ink); padding: 12px 18px 10px;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  button.go:hover:not(:disabled) { transform: translate(1px,1px); box-shadow: 2px 2px 0 var(--ink); }
+  button.go:disabled { box-shadow: 3px 3px 0 var(--line); }
+  button.link { border: 0; padding: 0; color: var(--terra-ink); text-decoration: underline; text-underline-offset: 3px; }
+  button.link:hover { border: 0; }
+
+  .note { margin: 0; font-size: 13.5px; color: var(--muted); display: flex; gap: 9px; align-items: flex-start; }
+  .note::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--terra); margin-top: 6px; flex: 0 0 auto; }
+  .note.good { color: var(--ok); } .note.good::before { background: var(--ok); }
+  .note.bad { color: var(--bad); } .note.bad::before { background: var(--bad); }
+  .bar { height: 5px; background: var(--plate); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--ink); transition: width .3s linear; }
+  .phase { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--muted); }
+
+  /* ---- empty state ---------------------------------------------------- */
+  .intro { max-width: 620px; margin: 26px auto 40px; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 5px; padding: 40px 20px; text-align: center;
+    cursor: pointer; transition: border-color .12s, background .12s; display: block; width: 100%;
+  }
+  .drop:hover, .drop.over { border-color: var(--terra); background: rgba(224,145,94,.09); }
+  .drop svg { display: block; margin: 0 auto 14px; }
+  .drop strong { display: block; font-size: 17px; }
+  .drop span { color: var(--muted); font-size: 13.5px; }
+  .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; margin: 18px 0; }
+  .or::before, .or::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+  .row { display: flex; gap: 8px; }
+  .row > input { flex: 1; }
+  .prose { border-top: 1px solid var(--line); margin-top: 26px; padding-top: 20px; color: var(--muted); font-size: 14px; }
+  .prose p { margin: 0 0 12px; }
+
+  /* ---- the shelf ------------------------------------------------------ */
+  /* The other half of the way in. A handoff zip is big and slow to send from a
+     phone, so anything already imported has to be one tap away or it gets sent
+     again — which is how the box ended up with two dozen copies of one export. */
+  .works { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; }
+  .wrap { position: relative; }
+  .wcard {
+    display: block; width: 100%; text-align: left; padding: 6px;
+    border: 1.5px solid var(--line); border-radius: 4px; background: #fff;
+  }
+  .wcard:hover { border-color: var(--terra); }
+  .wcard .wcov { display: grid; place-items: center; aspect-ratio: 4 / 3; background: var(--plate); overflow: hidden; }
+  .wcard .wcov img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .wcard .wcov span { font: 400 10px/1 var(--mono); color: var(--muted); letter-spacing: .1em; }
+  .wcard .wnm { display: block; font: 700 12.5px/1.35 Karla, sans-serif; margin-top: 7px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wcard .wmeta { display: block; font: 400 10px/1.5 var(--mono); color: var(--muted); }
+  .wdel { position: absolute; top: 4px; right: 4px; border: 0; border-radius: 3px;
+    padding: 3px 7px 4px; font: 400 14px/1 var(--mono); color: var(--muted); background: rgba(244,241,233,.9); }
+  .wdel:hover:not(:disabled) { color: var(--bad); border: 0; }
+  .wrap.fresh .wcard { border-color: var(--ink); box-shadow: 3px 3px 0 var(--terra); }
+
+  /* ---- choosing what to keep ------------------------------------------ */
+  .pick { max-width: 620px; margin: 20px auto 40px; width: 100%; }
+  .pick h3 { font: 700 17px/1.3 Karla, sans-serif; margin: 0 0 6px; }
+  .pintro { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .ptools { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .ptools .cnt { margin-left: auto; font: 400 11px/1 var(--mono); color: var(--muted); }
+  .plist { border: 1.5px solid var(--line); border-radius: 5px; background: #fdfcf9; overflow: hidden; }
+  .pgrp { border-top: 1px solid var(--line); }
+  .pgrp:first-child { border-top: 0; }
+  .pgrp > b { display: block; padding: 8px 14px 4px; font: 500 10px/1.4 var(--mono);
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  /* A row is a label, and the label rule above shouts every form caption in small caps. */
+  .prow { display: flex; align-items: center; gap: 11px; padding: 9px 14px; margin: 0; cursor: pointer;
+    font: inherit; letter-spacing: normal; text-transform: none; color: var(--ink); }
+  .prow + .prow { border-top: 1px solid rgba(206,199,184,.5); }
+  .prow:hover { background: rgba(224,145,94,.07); }
+  .prow input { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--terra-ink); }
+  .prow .pnm { flex: 1; min-width: 0; font: 400 13.5px/1.4 Karla, sans-serif;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prow .psz { flex: 0 0 auto; font: 400 11px/1 var(--mono); color: var(--muted); }
+  .pact { display: flex; align-items: center; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+
+  /* ---- the gate ------------------------------------------------------- */
+  .gate { display: flex; flex-direction: column; align-items: center; }
+  .frame { margin: 4px 0 0; padding: 15px; position: relative; }
+  .frame::before, .frame::after, .plate::before, .plate::after {
+    content: ""; position: absolute; width: 13px; height: 13px; border: 1.5px solid var(--ink);
+  }
+  .frame::before { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+  .frame::after { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+  .plate { position: relative; background: var(--plate); line-height: 0; }
+  .plate::before { top: -15px; right: -15px; border-left: 0; border-bottom: 0; }
+  .plate::after { bottom: -15px; left: -15px; border-right: 0; border-top: 0; }
+  .plate img, .plate video { display: block; max-height: var(--gate); max-width: 100%; width: auto; }
+  .plate video { background: #000; }
+  .cap { margin: 12px 0 0; font: 400 11px/1 var(--mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+
+  .status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-height: 34px; margin: 20px 0 0; }
+  .status .note, .status .phase { flex: 1; }
+  /* How long a loop to look for. The window played is twice it, so this is the
+     one number worth spending: a slide that repeats every 5s need not play 40. */
+  .scan { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+  .scan label { margin: 0; letter-spacing: .06em; text-transform: none; }
+  .scan input { width: 54px; padding: 7px 8px; text-align: right; }
+  .scan .su { font: 400 11px/1 var(--mono); color: var(--muted); }
+  .done { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+  .done .note { flex: 1; min-width: 200px; }
+
+  /* ---- the dock ------------------------------------------------------- */
+  .dock { border: 1.5px solid var(--line); border-radius: 5px; padding: 16px 18px 18px; margin-top: 20px; background: #fdfcf9; overflow: hidden; }
+  .modes { display: flex; gap: 0; margin: 0 0 16px; border-bottom: 1px solid var(--line); }
+  .mode { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 0 2px 9px; margin-right: 20px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .mode:hover { border-color: transparent; color: var(--ink); }
+  .mode[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--terra); font-weight: 700; }
+  .fields { display: flex; gap: 10px; flex-wrap: wrap; }
+  .f { flex: 1 1 96px; position: relative; }
+  .f.wide { flex: 1.6 1 150px; }
+  .f .u { position: absolute; right: 10px; bottom: 9px; font: 400 11px var(--mono); color: var(--muted); pointer-events: none; }
+  .f.u-on input { padding-right: 24px; }
+  .act { display: flex; align-items: center; gap: 16px; margin-top: 18px; }
+  .dock .bar { margin: 18px -18px -18px; }
+  .dock[data-mode="video"] [data-for="still"], .dock[data-mode="still"] [data-for="video"] { display: none; }
+  /* Finding a loop costs a whole browser run, and a still has no loop to find. */
+  body[data-mode="still"] #s3 { display: none; }
+
+  /* ---- slides rail ---------------------------------------------------- */
+  .tiles { display: flex; flex-direction: column; gap: 10px; }
+  .tile { border: 1.5px solid var(--line); border-radius: 4px; background: #fff; padding: 6px; cursor: pointer; text-align: left; display: block; width: 100%; }
+  .tile:hover { border-color: var(--terra); }
+  .tile[aria-pressed="true"] { border-color: var(--ink); box-shadow: 3px 3px 0 var(--terra); }
+  .tile img { width: 100%; display: block; background: var(--plate); }
+  .tile .nm { font: 700 12px/1.3 Karla, sans-serif; margin-top: 7px; display: flex; gap: 6px; }
+  .tile .nm i { font: 400 11px/1.45 var(--mono); color: var(--muted); font-style: normal; }
+  .tile .dim { font: 400 11px/1.3 var(--mono); color: var(--muted); }
+
+  /* ---- exports rail --------------------------------------------------- */
+  /* Renders pile up fast, so they stay folded away by the design they came from
+     and the day they were made; the list scrolls rather than set the window height. */
+  .lib { max-height: 360px; overflow-y: auto; }
+  .grp { border-top: 1px solid var(--line); border-bottom: 0; padding: 0; margin: 0; font-size: inherit; }
+  .grp:first-child { border-top: 0; }
+  .grp > summary { display: flex; gap: 7px; padding: 8px 0; font: inherit; letter-spacing: 0; list-style: none; }
+  .grp > summary::-webkit-details-marker { display: none; }
+  .grp > summary::before { content: '▸'; flex: 0 0 9px; font: 400 11px/1.5 var(--mono); color: var(--muted); }
+  .grp[open] > summary::before { content: '▾'; }
+  .grp .gtext { min-width: 0; }
+  .grp .gname { display: block; font: 700 12px/1.35 Karla, sans-serif; }
+  .grp .gmeta { display: block; font: 400 10px/1.5 var(--mono); color: var(--muted); }
+  .grp[open] > summary .gname { color: var(--terra-ink); }
+  .grp ul { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .grp li { display: flex; align-items: center; gap: 2px; }
+  .lib a { flex: 1; min-width: 0; display: flex; gap: 9px; align-items: center; text-decoration: none; color: var(--ink); padding: 4px; border: 1.5px solid transparent; border-radius: 4px; }
+  .lib a:hover { border-color: var(--line); background: #fff; }
+  /* Shown on every row rather than on hover, because a phone has no hover. */
+  .lib .del { flex: 0 0 auto; border: 0; background: none; padding: 6px 7px;
+    font: 400 15px/1 var(--mono); color: var(--muted); }
+  .lib .del:hover:not(:disabled) { color: var(--bad); border-color: transparent; }
+  .lib .kind { flex: 0 0 32px; height: 32px; border: 1px solid var(--line); background: var(--plate);
+    display: grid; place-items: center; font: 700 9px var(--mono); color: var(--muted); }
+  .lib .meta { min-width: 0; }
+  .lib .nm { display: block; font: 400 11px/1.4 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lib .sz { font: 400 10px/1.4 var(--mono); color: var(--muted); }
+  .empty { color: var(--muted); font-size: 13px; margin: 0; }
+
+  /* ---- the machine ---------------------------------------------------- */
+  /* A render is the heaviest thing this box does, so this is not decoration: it is
+     how you tell whether starting one now is a good idea, and what is still running
+     when you think you are done. */
+  .mach { margin-top: 26px; }
+  .mach h2 span { color: var(--terra-ink); }
+  .g { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+  .g dt { flex: 0 0 46px; font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .g dd { flex: 1; margin: 0; display: flex; align-items: center; gap: 9px; min-width: 0; }
+  /* A fixed column, so both meters end at the same place: a ragged pair reads as a bug. */
+  .g b { flex: 0 0 82px; text-align: right; white-space: nowrap;
+    font: 400 10.5px/1 var(--mono); color: var(--muted); font-weight: 400; }
+  /* A segmented level meter rather than a smooth bar — one width to set, and it
+     belongs to the same 1-bit family as everything else here. */
+  .meter { flex: 1; height: 9px; min-width: 40px;
+    background: repeating-linear-gradient(90deg, var(--plate) 0 5px, transparent 5px 7px); }
+  .meter i { display: block; height: 100%; width: 0; transition: width .45s linear;
+    background: repeating-linear-gradient(90deg, var(--ink) 0 5px, transparent 5px 7px); }
+  .meter.hot i { background: repeating-linear-gradient(90deg, var(--bad) 0 5px, transparent 5px 7px); }
+  .mline { margin: 8px 0 0; font: 400 11px/1.5 var(--mono); color: var(--muted); }
+  .mline b { color: var(--ink); font-weight: 500; }
+  #killall { width: 100%; margin-top: 12px; }
+  #killall:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+
+  /* ---- the phone action bar -------------------------------------------- */
+  /* A phone stacks the three panes into one column, so the controls, the machine
+     and the finished file end up a scroll apart — and the two moments that matter
+     most are exactly when you cannot afford to go looking: stopping a render that
+     is eating the box, and taking the file once it is made. So the bar carries
+     whichever of those is live down to the thumb. A desktop shows all three panes
+     at once and needs none of it. */
+  .bbar { display: none; }
+  @media (max-width: 720px) {
+    .bbar {
+      display: block; position: fixed; inset: auto 0 0 0; z-index: 20;
+      background: var(--card); border-top: 2px solid var(--ink);
+      box-shadow: 0 -4px 14px rgba(43,39,36,.13);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .bline { height: 4px; background: var(--plate); }
+    .bline i { display: block; height: 100%; width: 0; background: var(--terra); transition: width .3s linear; }
+    .brow { display: flex; align-items: center; gap: 10px; padding: 9px 13px; }
+    .btxt { flex: 1; min-width: 0; }
+    .btxt b { display: block; font: 500 12px/1.4 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btxt span { font: 400 11px/1.4 var(--mono); color: var(--muted); }
+    .bbar button { flex: 0 0 auto; }
+    .bbar .go { font-size: 14px; padding: 11px 15px 9px; }
+    #bstop { border-color: var(--bad); color: var(--bad); }
+    .bbar[data-state="run"] #bget, .bbar[data-state="done"] #bstop { display: none; }
+    /* The bar floats over the page, so the page has to end above it. */
+    body.barred { padding-bottom: 74px; }
+  }
+
+  details { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 10px; font-size: 13px; }
+  details p { color: var(--muted); margin: 8px 0 0; }
+  summary { cursor: pointer; font: 500 11px/1.3 var(--mono); letter-spacing: .04em; }
+  code { font: 400 12px/1.4 var(--mono); background: rgba(43,39,36,.07); padding: 1px 5px; border-radius: 2px; }
+  .helps { margin-top: 26px; }
+
+  /* The phase rules above carry an attribute selector, so they outrank anything
+     plain in here however late it comes — every one of them has to be named again. */
+  @media (max-width: 1080px) {
+    .panes, body[data-phase="empty"] .panes, body[data-phase="pick"] .panes { grid-template-columns: 168px minmax(0,1fr); }
+    .side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+    body[data-phase="empty"] .panes, body[data-phase="pick"] .panes { grid-template-columns: minmax(0,1fr); }
+  }
+  @media (max-width: 720px) {
+    body { padding: 0; }
+    .pick { margin-top: 4px; }
+    .works { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .shell { border-width: 0 0 2px; border-radius: 0; box-shadow: none; }
+    .panes { grid-template-columns: minmax(0,1fr); }
+    .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+    .tiles { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+    .tile { flex: 0 0 128px; }
+    .stage { padding: 16px; }
+    .titlebar h1 { font-size: 13px; }
+    .status { flex-direction: column; align-items: flex-start; }
+    /* The filename needs the whole width or it clips the Change button off-screen. */
+    .src { flex: 1 0 100%; max-width: none; margin-left: 0; }
+    :root { --gate: 44vh; }
+
+    /* The one button you came to press should not be sharing a line with a status
+       message, and it is worth the full width of the thumb. Same for the hand-off
+       and for anything that ends a decision. */
+    .act, .done, .pact { flex-direction: column; align-items: stretch; gap: 11px; }
+    .act .go, .done #dl, .pact button { width: 100%; }
+    .done .note { min-width: 0; }
+    /* A scrolling box inside a scrolling page is a trap on touch — the finger picks
+       the wrong one. The groups are folded shut anyway, so let it run. */
+    .lib { max-height: none; }
+    /* Small targets: a delete cross and a text link are both under a fingertip. */
+    .lib .del { padding: 11px 12px; }
+    .wdel { padding: 8px 12px; font-size: 15px; }
+    .ptools .link { padding: 7px 0; }
+    /* Grows the target without growing the titlebar, so it cannot push the name out. */
+    .src .link { padding: 10px 4px; margin: -10px 0; }
+    .prow { padding: 12px 14px; }
+    .prow input { width: 19px; height: 19px; }
+    /* Two tabs a fingertip apart, and the fingertip is wider than the word. */
+    .mode { padding: 11px 2px 12px; margin-right: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body data-phase="empty">
+<div class="shell">
+  <div class="titlebar">
+    <img src="/icon.svg" alt="">
+    <h1>PlumiRecord</h1>
+    <div class="src" id="src" hidden>
+      <span id="srcname"></span>
+      <select id="page" hidden aria-label="Page in this bundle"></select>
+      <button class="link" id="reset">Change</button>
+    </div>
+  </div>
+
+  <div class="panes">
+    <aside class="rail">
+      <section id="s2" hidden>
+        <h2>Slides</h2>
+        <div class="tiles" id="tiles"></div>
+      </section>
+    </aside>
+
+    <main class="stage">
+      <div class="intro" id="intro">
+        <div class="drop" id="drop" role="button" tabindex="0">
+          <svg width="34" height="34" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="13" height="13" rx="1.5" fill="none" stroke="#7a7268" stroke-width="1.4"/>
+            <circle cx="8" cy="8" r="3" fill="#e0915e"/>
+          </svg>
+          <strong>Drop a handoff zip</strong>
+          <span>or click to choose a file</span>
+        </div>
+        <input type="file" id="file" accept=".zip,.html,.htm" hidden>
+        <div class="or">or a public url</div>
+        <div class="row">
+          <input type="text" id="url" placeholder="https://example.com/page.html" spellcheck="false" aria-label="Public url">
+          <button id="urlgo">Load</button>
+        </div>
+        <p class="note" id="s1note" hidden></p>
+
+        <section id="shelf" hidden>
+          <div class="or">or pick up something you kept</div>
+          <div class="works" id="works"></div>
+        </section>
+
+        <div class="prose">
+          <p>Claude Design's Handoff button gives you a zip. Drop it here, choose the pages worth keeping, and they stay on the shelf above — so coming back to one costs a tap instead of another upload. Every artboard opens in a real browser, so the design system, the animations and the pixel fonts load exactly as they do on claude.ai.</p>
+          <p>For a video, ask it to find the loop: it plays the slide, catches the moment the picture starts repeating, and cuts there — so the clip loops without a jump. Tell it roughly how long that loop might be and it plays only as much of the slide as that takes. Any slide, moving or not, can also come back as a PNG re-drawn at up to four times its size.</p>
+        </div>
+      </div>
+
+      <section class="pick" id="pick">
+        <h3 id="picktitle"></h3>
+        <p class="pintro" id="pickintro"></p>
+        <div class="ptools">
+          <button class="link" id="pall">Tick every page</button>
+          <button class="link" id="pnone">Untick them all</button>
+          <span class="cnt" id="pcount"></span>
+        </div>
+        <div class="plist" id="plist"></div>
+        <div class="pact">
+          <button class="go" id="keep">Keep them</button>
+          <button id="pcancel">Throw the whole upload away</button>
+        </div>
+        <p class="note" id="pnote" hidden></p>
+      </section>
+
+      <div class="work">
+        <div class="gate">
+          <figure class="frame">
+            <div class="plate">
+              <img id="still" alt="The slide you picked">
+              <video id="preview" controls loop muted playsinline hidden></video>
+            </div>
+          </figure>
+          <p class="cap" id="cap"></p>
+        </div>
+
+        <section class="status" id="s3" hidden>
+          <div class="bar" id="dbar" hidden style="flex:1"><i></i></div>
+          <p class="phase" id="dphase" hidden></p>
+          <p class="note" id="s3note" hidden></p>
+          <span class="scan" id="scanbox">
+            <button id="find">Find the loop</button>
+            <label for="scan">up to</label>
+            <input type="number" id="scan" min="1" max="60" step="1" value="18">
+            <span class="su">s</span>
+          </span>
+        </section>
+
+        <div class="done" id="result" hidden>
+          <p class="note good" id="rstats"></p>
+          <button id="dl">Download the mp4</button>
+        </div>
+
+        <section class="dock" id="s4" data-mode="video" hidden>
+          <div class="modes">
+            <button class="mode" id="mvideo" data-mode="video" aria-pressed="true">Video</button>
+            <button class="mode" id="mstill" data-mode="still" aria-pressed="false">Still</button>
+          </div>
+          <div class="fields">
+            <div class="f u-on" data-for="video"><label for="dur">Length</label><input type="number" id="dur" step="0.1" min="0.5" max="120"><span class="u">s</span></div>
+            <div class="f u-on"><label for="start">Starts at</label><input type="number" id="start" step="0.1" min="0" value="0"><span class="u">s</span></div>
+            <div class="f" data-for="video"><label for="fps">Fps</label><input type="number" id="fps" step="1" min="10" max="120" value="30"></div>
+            <div class="f wide" data-for="video"><label for="scale">Size</label><select id="scale"></select></div>
+            <div class="f wide" data-for="still"><label for="pscale">Size</label><select id="pscale"></select></div>
+          </div>
+          <div class="act">
+            <button class="go" id="go" data-for="video">Record the mp4</button>
+            <button class="go" id="png" data-for="still">Save the PNG</button>
+            <p class="phase" id="rphase" hidden></p>
+            <p class="note" id="pngnote" hidden></p>
+            <p class="note bad" id="rerr" hidden></p>
+          </div>
+          <div class="bar" id="rbar" hidden><i></i></div>
+        </section>
+      </div>
+    </main>
+
+    <aside class="side">
+      <h2>Exports<span id="libcount"></span></h2>
+      <div class="lib" id="lib"></div>
+      <p class="empty" id="libempty">Renders show up here.</p>
+      <section class="mach">
+        <h2>Machine<span id="machbusy" hidden> — working</span></h2>
+        <dl class="gauges">
+          <div class="g"><dt>Cpu</dt><dd><span class="meter" id="gcpu"><i></i></span><b id="vcpu">—</b></dd></div>
+          <div class="g"><dt>Memory</dt><dd><span class="meter" id="gram"><i></i></span><b id="vram">—</b></dd></div>
+        </dl>
+        <p class="mline" id="vbrow">Counting what is running...</p>
+        <p class="mline" id="vwork"></p>
+        <p class="mline" id="vdisk"></p>
+        <button id="killall" disabled>Close the browsers</button>
+      </section>
+
+      <div class="helps">
+        <h2>If something is off</h2>
+        <details>
+          <summary>No loop was found</summary>
+          <p>Some slides only repeat after a minute or more. Raise the seconds beside <em>Find the loop</em> and look again, or type the length yourself — it is usually written in the design source as <code>DURATION</code>.</p>
+        </details>
+        <details>
+          <summary>It says there is not enough memory</summary>
+          <p>Every doubling of the size costs about four times the memory, and a video renders in several browsers at once. Drop to 1×, lower the fps, or press <em>Close the browsers</em> above and try again.</p>
+        </details>
+        <details>
+          <summary>It says the page never mounted</summary>
+          <p>A raw <code>.dc.html</code> loads React from unpkg.com, so this box needs to be online. If it is, try the copy inside the bundle's <code>export/</code> folder — that one is self-contained.</p>
+        </details>
+        <details>
+          <summary>Pasting a claude.ai link</summary>
+          <p>Those pages need your login, so they will not load. Public or self-hosted URLs work; for Claude Design, use the zip.</p>
+        </details>
+        <details>
+          <summary>Where the files live</summary>
+          <p>On this machine, under <code id="vdata">your app-data folder</code>. Nothing is uploaded anywhere.</p>
+        </details>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="bbar" id="bbar" hidden>
+  <div class="bline"><i id="bfill"></i></div>
+  <div class="brow">
+    <div class="btxt"><b id="btitle"></b><span id="bsub"></span></div>
+    <button id="bstop">Stop</button>
+    <button class="go" id="bget">Save</button>
+  </div>
+</div>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const state = { id: null, url: null, page: null, tile: null, tiles: [], name: 'clip' };
+
+const show = (el, on = true) => { $(el).hidden = !on; };
+const note = (el, msg, kind = '') => { const n = $(el); n.textContent = msg; n.className = 'note ' + kind; n.hidden = !msg; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/* A deck usually labels its artboards with their own number, which the rail's
+   index already says — so only keep a label that adds something. */
+function nameOf(t, i) {
+  const n = String(i + 1).padStart(2, '0');
+  const label = (t.label || '').trim();
+  return { n, label: label === n || label === String(i + 1) ? '' : label };
+}
+/* Which panes exist at all: nothing loaded, a bundle open, a slide picked. */
+const phase = p => document.body.dataset.phase = p;
+
+async function api(path, body, opts = {}) {
+  const res = await fetch(path, { method: 'POST', body: body instanceof Blob ? body : JSON.stringify(body), ...opts });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+/* Jobs are long; the server streams phase + progress over SSE. The handle can be
+   stopped, which also tells the server to drop the job — otherwise picking a
+   second slide leaves you queued behind the browser work for the first. */
+const SUPERSEDED = 'superseded';
+function watch(id, onTick) {
+  const es = new EventSource(`/api/jobs/${id}/events`);
+  let bail;
+  const p = new Promise((resolve, reject) => {
+    bail = reject;
+    es.onmessage = e => {
+      const m = JSON.parse(e.data);
+      onTick(m);
+      if (!m.done) return;
+      es.close();
+      m.error ? reject(new Error(m.error)) : resolve(m.result);
+    };
+    es.onerror = () => { es.close(); reject(new Error('lost contact with the recorder')); };
+  });
+  p.stop = () => {
+    es.close();
+    fetch(`/api/jobs/${id}/cancel`, { method: 'POST' }).catch(() => {});
+    bail(new Error(SUPERSEDED));
+  };
+  return p;
+}
+
+// ---- the source
+const drop = $('#drop');
+drop.onclick = () => $('#file').click();
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#file').click(); } };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]); };
+$('#file').onchange = e => e.target.files[0] && upload(e.target.files[0]);
+$('#reset').onclick = () => home();
+$('#urlgo').onclick = () => {
+  const u = $('#url').value.trim();
+  if (!u) return;
+  state.id = state.page = null;
+  state.url = u;
+  state.base = state.name = decodeURIComponent(u.split('/').pop() || 'page').replace(/\.dc\.html$|\.\w+$/, '');
+  note('#s1note', 'Loading ' + u);
+  source(state.base, []);
+  loadTiles();
+};
+
+function home(fresh) {
+  phase('empty');
+  note('#s1note', '');
+  show('#src', false);
+  bar(null);
+  return shelf(fresh);
+}
+
+function source(name, pages) {
+  $('#srcname').textContent = name;
+  const sel = $('#page');
+  sel.innerHTML = pages.map(p => `<option value="${esc(p.path)}">${esc(p.title)}</option>`).join('');
+  sel.hidden = pages.length < 2;
+  show('#src');
+}
+$('#page').onchange = e => {
+  state.page = e.target.value;
+  state.base = state.name = e.target.selectedOptions[0].textContent;
+  loadTiles();
+};
+
+// ---- the shelf
+const size = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+const day = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+async function shelf(fresh) {
+  const items = state.works = await fetch('/api/works').then(r => r.json()).catch(() => []);
+  $('#shelf').hidden = !items.length;
+  $('#works').innerHTML = items.map(w => `<div class="wrap${w.id === fresh ? ' fresh' : ''}">
+    <button class="wcard" data-id="${w.id}">
+      <span class="wcov">${w.cover
+        ? `<img src="${w.cover}" alt="" loading="lazy">`
+        : '<span>no picture yet</span>'}</span>
+      <span class="wnm" title="${esc(w.name)}">${esc(w.name)}</span>
+      <span class="wmeta">${w.pages.length} page${w.pages.length > 1 ? 's' : ''} · ${day(w.at)} · ${size(w.bytes)}</span>
+    </button>
+    <button class="wdel" data-id="${w.id}" title="Throw away" aria-label="Throw away ${esc(w.name)}">×</button>
+  </div>`).join('');
+}
+
+$('#works').onclick = async e => {
+  const del = e.target.closest('.wdel');
+  if (del) {
+    const w = state.works.find(x => x.id === del.dataset.id);
+    if (!confirm(`Throw away ${w.name}?\n\nIts ${w.pages.length} page${w.pages.length > 1 ? 's go' : ' goes'} off the box for good. Anything already exported from it stays.`)) return;
+    del.disabled = true;
+    await fetch('/works/' + w.id, { method: 'DELETE' }).catch(() => {});
+    return shelf();
+  }
+  const card = e.target.closest('.wcard');
+  if (card) openWork(state.works.find(w => w.id === card.dataset.id));
+};
+
+function openWork(w) {
+  if (!w) return;
+  state.id = w.id;
+  state.url = null;
+  state.page = w.pages[0].path;
+  state.base = state.name = w.pages[0].title;
+  source(w.name, w.pages);
+  loadTiles();
+}
+
+// ---- what to keep out of an upload
+/* An upload is not work yet. It is unpacked, listed, and left alone until someone
+   says which pages matter — so a handoff can be imported now and made something of
+   later, and the drafts and screenshots that came with it never touch the shelf. */
+async function upload(file) {
+  note('#s1note', `Unpacking ${file.name}...`);
+  try {
+    const r = state.staged = await api('/api/source?name=' + encodeURIComponent(file.name), file);
+    note('#s1note', '');
+    if (r.pages.length === 1) return keepStaged([r.pages[0].path]);
+    picker(r);
+  } catch (err) { note('#s1note', err.message, 'bad'); }
+}
+
+function picker(r) {
+  phase('pick');
+  $('#picktitle').textContent = `${r.name} — ${r.pages.length} pages inside`;
+  $('#pickintro').textContent = 'Tick the pages worth keeping. They go on the shelf, ready whenever you come '
+    + `back to them. Everything left unticked is deleted from the box, along with any of the ${r.others} `
+    + 'other files in the upload that the kept pages never touch.';
+
+  const folders = new Map();
+  for (const p of r.pages) {
+    const at = p.path.includes('/') ? p.path.slice(0, p.path.lastIndexOf('/')) : '';
+    if (!folders.has(at)) folders.set(at, []);
+    folders.get(at).push(p);
+  }
+  $('#plist').innerHTML = [...folders].map(([at, ps]) => `<div class="pgrp">
+    <b>${at ? esc(at) : 'top of the upload'}</b>
+    ${ps.map(p => `<label class="prow">
+      <input type="checkbox" value="${esc(p.path)}"${p === r.pages[0] ? ' checked' : ''}>
+      <span class="pnm" title="${esc(p.path)}">${esc(p.title)}</span>
+      <span class="psz">${size(p.size)}</span></label>`).join('')}</div>`).join('');
+  note('#pnote', '');
+  tally();
+}
+
+const ticked = () => [...$('#plist').querySelectorAll('input:checked')].map(i => i.value);
+function tally() {
+  const n = ticked().length;
+  $('#pcount').textContent = `${n} of ${state.staged.pages.length} ticked`;
+  $('#keep').disabled = !n;
+  $('#keep').textContent = n > 1 ? `Keep these ${n}` : 'Keep this one';
+}
+$('#plist').onchange = tally;
+const tickAll = on => { $('#plist').querySelectorAll('input').forEach(i => { i.checked = on; }); tally(); };
+$('#pall').onclick = () => tickAll(true);
+$('#pnone').onclick = () => tickAll(false);
+
+$('#keep').onclick = () => keepStaged(ticked());
+async function keepStaged(pages) {
+  $('#keep').disabled = true;
+  note('#pnote', 'Keeping those and clearing the rest...');
+  try {
+    const w = await api('/api/source/keep', { id: state.staged.id, pages, name: state.staged.name });
+    state.staged = null;
+    await home(w.id);
+    note('#s1note', `${w.name} is on the shelf — ${w.dropped} file${w.dropped === 1 ? '' : 's'} thrown away. Tap it when you want to work on it.`, 'good');
+  } catch (err) {
+    note('#pnote', err.message, 'bad');
+    $('#keep').disabled = false;
+  }
+}
+
+$('#pcancel').onclick = async () => {
+  if (!confirm(`Throw away ${state.staged.name}?\n\nNothing from it is kept.`)) return;
+  await api('/api/source/discard', { id: state.staged.id }).catch(() => {});
+  state.staged = null;
+  home();
+};
+
+// ---- the slides
+async function loadTiles() {
+  phase('source');
+  show('#s2'); show('#s3', false); show('#s4', false);
+  $('#tiles').innerHTML = '<p class="phase">Opening the page...</p>';
+  try {
+    const { tiles } = await api('/api/probe', { id: state.id, page: state.page, url: state.url });
+    state.tiles = tiles;
+    $('#tiles').innerHTML = tiles.map((t, i) => {
+      const { n, label } = nameOf(t, i);
+      return `<button class="tile" data-i="${i}" aria-pressed="false">
+        <img src="${t.thumb}" alt="">
+        <div class="nm">${label ? `<i>${n}</i>${esc(label)}` : n}</div>
+        <div class="dim">${t.width} × ${t.height}</div>
+      </button>`;
+    }).join('');
+    $('#tiles').querySelectorAll('.tile').forEach(b => b.onclick = () => pickTile(Number(b.dataset.i)));
+    pickTile(0);
+  } catch (err) {
+    $('#tiles').innerHTML = '';
+    await home();
+    note('#s1note', err.message, 'bad');
+  }
+}
+
+function pickTile(i) {
+  const t = state.tiles[i];
+  state.tile = t.selector;
+  /* The server needs the tile's own size to work out what a render will cost before
+     it starts one, and only the page that probed it knows that. */
+  state.w = t.width; state.h = t.height;
+  phase('ready');
+  document.querySelectorAll('.tile').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+  state.name = state.base + '-' + String(t.label || i + 1).replace(/\s+/g, '');
+
+  $('#still').src = t.thumb;
+  $('#still').hidden = false;
+  $('#preview').hidden = true;
+  $('#preview').removeAttribute('src');
+  const { n, label } = nameOf(t, i);
+  $('#cap').textContent = `${label || 'Slide ' + n} — ${t.width} × ${t.height}`;
+  show('#result', false); show('#rerr', false); note('#pngnote', '');
+  bar(null);
+
+  $('#scale').innerHTML = [1, 2].map(s =>
+    `<option value="${s}">${t.width * s} × ${t.height * s}${s > 1 ? ' (slower)' : ''}</option>`).join('');
+  /* A still is one screenshot, so the sizes a video cannot afford are free here. */
+  $('#pscale').innerHTML = [1, 2, 3, 4].map(s =>
+    `<option value="${s}"${s === 4 ? ' selected' : ''}>${t.width * s} × ${t.height * s}</option>`).join('');
+  show('#s3'); show('#s4');
+  mode('video');
+  resetLoop();
+}
+
+// ---- video or still
+function mode(m) {
+  $('#s4').dataset.mode = m;
+  document.body.dataset.mode = m;
+  $('#mvideo').setAttribute('aria-pressed', String(m === 'video'));
+  $('#mstill').setAttribute('aria-pressed', String(m === 'still'));
+}
+$('#mvideo').onclick = () => mode('video');
+$('#mstill').onclick = () => mode('still');
+
+// ---- the loop
+/* Playing a slide to the point it repeats costs a whole browser run, so it only
+   happens when asked for — a length typed by hand skips it entirely. A period
+   only counts once it has been watched repeat in full, and the first 3s are
+   skipped so a one-shot intro cannot veto a real loop, so the slide has to play
+   twice the longest loop asked for plus that intro. Hence the field asks how long
+   the loop might be rather than how long to play: it is the number you know. */
+const upTo = () => Math.min(60, Math.max(1, Math.round(Number($('#scan').value) || 18)));
+$('#find').onclick = () => detect(upTo());
+
+function resetLoop() {
+  /* Stopping a run in flight makes it bail out early, so re-enable Record here. */
+  state.detect?.stop();
+  state.detect = null;
+  $('#go').disabled = false;
+  show('#dbar', false); show('#dphase', false);
+  show('#scanbox');
+  $('#dur').value = '';
+  $('#start').value = 0;
+  note('#s3note', 'Type the length, or play the slide to find where it repeats.');
+}
+
+async function detect(longest) {
+  const seconds = longest * 2 + 3;
+  state.detect?.stop();
+  show('#dbar'); show('#dphase');
+  show('#scanbox', false);
+  note('#s3note', '');
+  $('#dbar i').style.width = '0%';
+  $('#dphase').textContent = `Playing ${seconds}s of the slide...`;
+  $('#go').disabled = true;
+  try {
+    const { job } = await api('/api/jobs', { kind: 'detect', id: state.id, page: state.page, url: state.url, tile: state.tile, window: seconds });
+    const w = state.detect = watch(job, m => {
+      $('#dbar i').style.width = Math.round((m.pct || 0) * 100) + '%';
+      $('#dphase').textContent = m.phase === 'queued'
+        ? 'Waiting for the browser to finish the previous slide...'
+        : `Playing ${seconds}s of the slide...`;
+    });
+    const r = await w;
+    state.detect = null;
+    show('#dbar', false); show('#dphase', false);
+    show('#scanbox');
+    if (r.loop) {
+      $('#dur').value = r.loop;
+      $('#start').value = r.start || 0;
+      note('#s3note', r.start
+        ? `Repeats every ${r.loop}s, once the opening ${r.start}s has played — so the clip starts there.`
+        : `Repeats every ${r.loop}s. That is one clean loop.`, 'good');
+    } else if (r.still) {
+      /* Nothing to record, so put the only useful export in front of them — and
+         say why over there, because this section goes away with the video mode. */
+      mode('still');
+      note('#s3note', 'Nothing on this slide moves. Save it as a still instead.', 'bad');
+      note('#pngnote', 'Nothing on this slide moves, so a still is the whole picture.');
+    } else {
+      note('#s3note', `No loop shorter than ${longest}s. Type the length yourself, or raise the seconds and look again.`, 'bad');
+    }
+  } catch (err) {
+    if (err.message === SUPERSEDED) return;
+    show('#dbar', false); show('#dphase', false);
+    show('#scanbox');
+    note('#s3note', err.message, 'bad');
+  }
+  $('#go').disabled = false;
+}
+
+// ---- export
+$('#go').onclick = async () => {
+  const duration = Number($('#dur').value);
+  if (!(duration > 0)) return note('#s3note', 'Set a length first.', 'bad');
+  $('#go').disabled = true;
+  show('#result', false); show('#rerr', false); show('#rbar'); show('#rphase');
+  $('#rbar i').style.width = '0%';
+  bar('run', 'Starting the render', '', 0);
+  try {
+    const { job } = await api('/api/jobs', {
+      kind: 'record', id: state.id, page: state.page, url: state.url, tile: state.tile,
+      duration, start: Number($('#start').value) || 0, fps: Number($('#fps').value) || 30,
+      scale: Number($('#scale').value) || 1, name: state.name, w: state.w, h: state.h,
+    });
+    const r = await watch(job, m => {
+      $('#rphase').textContent = m.phase;
+      $('#rbar i').style.width = Math.round((m.pct || 0) * 100) + '%';
+      bar('run', m.phase, m.pct ? Math.round(m.pct * 100) + '%' : '', m.pct);
+    });
+    show('#rbar', false); show('#rphase', false); show('#result');
+    $('#still').hidden = true;
+    $('#preview').hidden = false;
+    $('#preview').src = '/renders/' + r.file;
+    $('#dl').onclick = () => handOver(r.file);
+    $('#rstats').textContent = `${r.width} × ${r.height}, ${duration}s at ${$('#fps').value}fps. `
+      + (r.stepped ? 'Every frame drawn exactly.' : r.reused ? r.reused + ' frames had to be reused.' : 'No dropped frames.');
+    library(r.file);
+    bar('done', `${r.width} × ${r.height} clip ready`, `${duration}s at ${$('#fps').value}fps`, 1);
+    offerShare(r.file);
+  } catch (err) {
+    show('#rbar', false); show('#rphase', false);
+    note('#rerr', err.message, 'bad');
+    /* The bar is where they were watching, so send them back to what went wrong
+       rather than leaving the message somewhere up the page. */
+    bar(null);
+    $('#rerr').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  $('#go').disabled = false;
+};
+
+$('#png').onclick = async () => {
+  $('#png').disabled = true;
+  note('#pngnote', 'Drawing the frame...');
+  bar('run', 'Drawing the frame', '', 0);
+  try {
+    const { job } = await api('/api/jobs', {
+      kind: 'png', id: state.id, page: state.page, url: state.url, tile: state.tile,
+      start: Number($('#start').value) || 0, scale: Number($('#pscale').value) || 1,
+      name: state.name, w: state.w, h: state.h,
+    });
+    const r = await watch(job, m => {
+      note('#pngnote', m.phase === 'queued' ? 'Waiting for the browser to finish the previous slide...' : 'Drawing the frame...');
+    });
+    note('#pngnote', `${r.width} × ${r.height} saved.`, 'good');
+    save(r.file);
+    library(r.file);
+    /* A still gets the same hand-off as a clip, so it can go to Photos too. The
+       plate goes back to the slide, which is what the still is a picture of. */
+    $('#preview').hidden = true;
+    $('#still').hidden = false;
+    $('#rstats').textContent = `${r.width} × ${r.height} still.`;
+    $('#dl').onclick = () => handOver(r.file);
+    show('#result');
+    bar('done', `${r.width} × ${r.height} still saved`, 'Already in your downloads', 1);
+    offerShare(r.file);
+  } catch (err) {
+    note('#pngnote', err.message, 'bad');
+    bar(null);
+    $('#pngnote').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  $('#png').disabled = false;
+};
+
+// ---- the phone action bar
+/* Mirrors what the dock is already saying rather than deciding anything itself, so
+   there is still one source of truth for how a render is going. */
+function bar(stage, title, sub, pct) {
+  document.body.classList.toggle('barred', !!stage);
+  $('#bbar').hidden = !stage;
+  if (!stage) return;
+  $('#bbar').dataset.state = stage;
+  $('#btitle').textContent = title;
+  $('#bsub').textContent = sub || '';
+  $('#bfill').style.width = Math.round((pct || 0) * 100) + '%';
+}
+$('#bstop').onclick = () => $('#killall').click();
+$('#bget').onclick = () => state.made && handOver(state.made);
+
+// ---- handing the file over
+/* Pointing the tab itself at the file strands a phone on a native "Open in..."
+   screen with no browser chrome left to go back from. Hand it to the browser's
+   own downloader instead, which leaves the page where it was. */
+function save(name) {
+  const a = document.createElement('a');
+  a.href = '/renders/' + name + '?download';
+  a.download = name;
+  document.body.append(a); a.click(); a.remove();
+}
+
+/* A phone would rather put the clip in Photos than in Downloads. Safari only
+   opens the share sheet in the same tick as the tap, so there is no awaiting once
+   the button is pressed — the file is fetched up front, and the button only says
+   Share once it is actually in hand. */
+async function offerShare(name) {
+  const png = name.endsWith('.png');
+  const noun = png ? 'the PNG' : 'the mp4';
+  /* The bar has room for a verb and nothing else, so it gets the short form. */
+  const say = verb => { $('#dl').textContent = `${verb} ${noun}`; $('#bget').textContent = verb; };
+  state.share = null;
+  state.made = name;
+  say('Download');
+  if (!navigator.canShare) return;
+  try {
+    const blob = await fetch('/renders/' + name).then(r => r.blob());
+    const file = new File([blob], name, { type: png ? 'image/png' : 'video/mp4' });
+    if (!navigator.canShare({ files: [file] })) return;
+    state.share = file;
+    say('Share');
+  } catch { /* the plain download is still there */ }
+}
+
+function handOver(name) {
+  if (!state.share) return save(name);
+  /* Dismissing the sheet rejects too, and that is not a failure worth acting on. */
+  navigator.share({ files: [state.share] }).catch(err => { if (err.name !== 'AbortError') save(name); });
+}
+
+// ---- exports
+/* A render only records where it came from in its own filename: the design, then
+   the slide, then the base36 stamp that keeps it unique. Read it back off. */
+function origin(name) {
+  const stem = name.replace(/-[a-z0-9]{6,9}\.(mp4|png)$/i, '');
+  const slide = stem.match(/^(.*)-(\d{1,3})$/);
+  return { design: (slide ? slide[1] : stem).replace(/-+/g, ' ').trim(), slide: slide ? slide[2] : '' };
+}
+
+async function library(reveal) {
+  const items = await fetch('/api/library').then(r => r.json()).catch(() => []);
+  $('#libempty').hidden = items.length > 0;
+  $('#libcount').textContent = items.length ? ` (${items.length})` : '';
+
+  const groups = new Map();
+  for (const f of items) {
+    const { design, slide } = origin(f.name);
+    const day = new Date(f.at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const key = design + '\n' + day;
+    if (!groups.has(key)) groups.set(key, { design, day, files: [] });
+    groups.get(key).files.push({ ...f, slide });
+  }
+
+  $('#lib').innerHTML = [...groups.values()].map(g => {
+    const rows = g.files.map(f => {
+      const png = f.name.endsWith('.png');
+      const at = new Date(f.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      /* A 4K still shrunk to a 32px chip is unreadable and costs a megabyte to
+         fetch, so the row says which kind it is instead of showing it. */
+      const what = f.slide ? 'Slide ' + f.slide : png ? 'Still' : 'Clip';
+      return `<li><a href="/renders/${f.name}?download" download="${f.name}" title="${f.name}">
+        <span class="kind">${png ? 'PNG' : 'MP4'}</span>
+        <span class="meta"><span class="nm">${what}</span>
+        <span class="sz">${(f.size / 1048576).toFixed(1)} MB · ${at}</span></span></a>
+        <button class="del" data-file="${f.name}" title="Throw away"
+          aria-label="Throw away ${what} from ${esc(g.design)}">×</button></li>`;
+    }).join('');
+    /* The one you just made is the one you came here to find. */
+    const open = g.files.some(f => f.name === reveal) ? ' open' : '';
+    return `<details class="grp"${open}>
+      <summary><span class="gtext"><span class="gname">${esc(g.design)}</span>
+      <span class="gmeta">${g.day} · ${g.files.length} file${g.files.length > 1 ? 's' : ''}</span></span></summary>
+      <ul>${rows}</ul></details>`;
+  }).join('');
+}
+
+/* The rows are rebuilt from scratch on every refresh, so the shelf listens, not them. */
+$('#lib').onclick = async e => {
+  const btn = e.target.closest('.del');
+  if (!btn) return;
+  const name = btn.dataset.file;
+  if (!confirm(`Throw away ${name}?\n\nThis cannot be undone.`)) return;
+  btn.disabled = true;
+  /* Rebuilding folds every group shut, so keep this one open by pointing the
+     reveal at whatever is left beside the row that went. */
+  const li = btn.closest('li');
+  const kept = [...li.parentElement.children].find(o => o !== li)?.querySelector('.del')?.dataset.file;
+  try {
+    const r = await fetch('/renders/' + encodeURIComponent(name), { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'could not throw it away');
+    library(kept);
+  } catch (err) {
+    btn.disabled = false;
+    alert(err.message);
+  }
+};
+
+// ---- the machine
+/* Polling stops whenever the tab is not being looked at: this is open on a phone as
+   often as on a desktop, and a panel nobody can see is not worth a wake-up. */
+const gb = mb => (mb / 1024).toFixed(1) + ' GB';
+function meter(el, frac) {
+  const m = $(el);
+  m.querySelector('i').style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%';
+  m.classList.toggle('hot', frac > 0.85);
+}
+
+let machTimer = null;
+async function machine() {
+  try {
+    const s = state.stats = await fetch('/api/stats').then(r => r.json());
+    const used = s.ramTotalMb - s.ramFreeMb;
+    meter('#gcpu', s.cpu);
+    $('#vcpu').textContent = Math.round(s.cpu * 100) + '%';
+    meter('#gram', used / s.ramTotalMb);
+    $('#vram').textContent = `${(used / 1024).toFixed(1)} / ${gb(s.ramTotalMb)}`;
+    show('#machbusy', s.busy > 0);
+
+    $('#vbrow').innerHTML = s.browsers
+      ? `<b>${s.browsers}</b> browser${s.browsers > 1 ? 's' : ''} open · about <b>${gb(s.browserMb)}</b>`
+      : 'No browsers open.';
+    /* Also the way out of a queue that has stalled with nothing running, which is
+       the state in which this button is needed most — so busy alone is enough. */
+    $('#killall').disabled = !s.browsers && !s.busy;
+    /* One fact a line: the rail is 224px wide and every one of these wraps if joined. */
+    $('#vwork').innerHTML = `Up to <b>${s.workers}</b> browser${s.workers > 1 ? 's' : ''} per render`;
+    $('#vdisk').innerHTML = s.diskFreeMb ? `<b>${(s.diskFreeMb / 1024).toFixed(0)} GB</b> free for frames` : '';
+    /* The path differs on every platform, so it is reported rather than written down.
+       textContent, not innerHTML: this is a filesystem path and it contains a
+       username. */
+    if (s.dataDir) $('#vdata').textContent = s.dataDir;
+  } catch { /* the recorder is restarting; the next tick will find it */ }
+}
+
+function watchMachine() {
+  clearInterval(machTimer);
+  if (document.hidden) return;
+  machine();
+  machTimer = setInterval(machine, 2000);
+}
+document.addEventListener('visibilitychange', watchMachine);
+
+$('#killall').onclick = async () => {
+  const s = state.stats || {};
+  const ok = confirm(s.busy
+    ? 'A render is still running. Closing the browsers now will stop it.\n\nClose them anyway?'
+    : `Close ${s.browsers} browser${s.browsers === 1 ? '' : 's'} and free about ${gb(s.browserMb || 0)}?`);
+  if (!ok) return;
+  $('#killall').disabled = true;
+  await fetch('/api/browsers/kill', { method: 'POST' }).catch(() => {});
+  machine();
+};
+
+shelf();
+library();
+watchMachine();
+</script>
+</body>
+</html>

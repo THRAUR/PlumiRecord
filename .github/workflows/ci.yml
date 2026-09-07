@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The claim on the tin is "Linux, macOS and Windows", so all three actually record
+  # a video here rather than only type-checking. The browser is the one each runner
+  # already has — a normal Google Chrome, which is also what most people have — so
+  # this is the path the majority of users are on.
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ffmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Check the machine has what it needs
+        run: node bin/plumirecord.mjs --doctor
+
+      - name: Test
+        run: npm test
+
+      # Proof rather than a passing assertion: the artifact on the run page is a real
+      # mp4 that anybody can download and play.
+      - name: Record the fixture slide
+        run: node bin/plumirecord.mjs test/fixture.html --tile "#slide" --duration 2 --out fixture-${{ matrix.os }}.mp4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clip-${{ matrix.os }}
+          path: fixture-*.mp4
+
+  # The other half of the browser story: chrome-headless-shell, which is what the
+  # README recommends and what an unattended box should run. Once is enough — the
+  # difference from the matrix above is the binary, not the platform.
+  headless-shell:
+    name: chrome-headless-shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx --yes playwright install chromium-headless-shell
+      - name: Check it is the shell that was found
+        run: node bin/plumirecord.mjs --doctor | grep -- '-headless-shell'
+      - run: npm test

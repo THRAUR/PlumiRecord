@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Design Recorder">
+  <rect width="16" height="16" rx="3.4" fill="#e0915e"/>
+  <rect x="2.5" y="1.5" width="11" height="13" rx="1.5" fill="#2b2724"/>
+  <rect x="3.5" y="2.5" width="9" height="11" rx=".8" fill="#f4f1e9"/>
+  <circle cx="8" cy="8" r="3.1" fill="#b4442f"/>
+</svg>

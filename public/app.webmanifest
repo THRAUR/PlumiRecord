@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "PlumiRecord",
+  "short_name": "PlumiRecord",
+  "description": "Turns an animated Claude Design slide into a social mp4",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "theme_color": "#e6e1d5",
+  "background_color": "#e6e1d5",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}
