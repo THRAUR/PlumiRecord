@@ -10,7 +10,7 @@
  */
 import { execFile, execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { cpus, freemem, homedir, totalmem, tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -185,6 +185,48 @@ export function ffmpegPath() {
   throw new Error(`ffmpeg is not on your PATH. Install it with:\n  ${how}\nor point PLUMIRECORD_FFMPEG at the binary.`);
 }
 
+/**
+ * Whether this ffmpeg can do the colour conversion with zimg.
+ *
+ * `zscale` only exists in a build configured --enable-libzimg, which Homebrew's
+ * bottle and the usual Windows builds are not. It is worth preferring where it is
+ * there — measured against a chart of flat patches it costs 0.56/255 mean error
+ * against swscale's 1.17 — but the difference is under a level and a filter that is
+ * not installed is a render that does not happen, so this decides rather than assumes.
+ */
+let zimg = null;
+export function hasZscale() {
+  if (zimg !== null) return zimg;
+  try {
+    const out = execFileSync(ffmpegPath(), ['-hide_banner', '-filters'],
+      { encoding: 'utf8', windowsHide: true, maxBuffer: 8 << 20 });
+    zimg = /^\s*\S*\s+zscale\s/m.test(out);
+  } catch { zimg = false; }
+  return zimg;
+}
+
+/**
+ * Remove a directory, allowing for Windows taking its time about it.
+ *
+ * `taskkill /F` returns once the kill is *scheduled*, not once the process has gone,
+ * so for a moment afterwards Chrome still holds handles on its profile and unlinking
+ * it fails with EBUSY. That is a cleanup step, and a cleanup step must never be able
+ * to fail an otherwise finished render — so this retries, and then gives up quietly.
+ * Whatever is left behind is swept by the next reapBrowsers().
+ */
+export async function rmTree(dir) {
+  for (let i = 0; i < 15; i++) {
+    try {
+      await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      return true;
+    } catch (err) {
+      if (!['EBUSY', 'EPERM', 'ENOTEMPTY', 'EACCES'].includes(err.code)) return false;
+      await new Promise(r => setTimeout(r, 150));
+    }
+  }
+  return false;
+}
+
 /* Pinning a render to a subset of cores needs taskset, which is Linux and
    util-linux only. Everywhere else ffmpeg's own thread flags are the whole cap —
    softer, but not nothing. */
@@ -346,7 +388,14 @@ async function listWindows(mark) {
      the Windows path in `mark` passes through untouched while the characters that
      would end the string, interpolate a variable, or act as -like wildcards do not. */
   const lit = mark.replace(/[`"$\[\]*?]/g, c => '`' + c);
-  const ps = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*${lit}*" } `
+  /* Filter on what the process *is* before what it was asked to do, exactly as the
+     Linux branch reads comm before cmdline. A command line is just text, and the
+     one process guaranteed to contain this profile path is the powershell running
+     this very query — so without the name test the answer always includes itself,
+     and reaping would kill the thing doing the reaping. */
+  const ps = 'Get-CimInstance Win32_Process | Where-Object { '
+    + "$_.Name -match '^(chrome|chromium|msedge|brave|headless_shell)' -and "
+    + `$_.CommandLine -like "*${lit}*" } `
     + '| Select-Object ProcessId,ParentProcessId,WorkingSetSize | ConvertTo-Json -Compress';
   const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, maxBuffer: 32 << 20 })
     .catch(() => ({ stdout: '' }));

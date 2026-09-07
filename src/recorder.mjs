@@ -18,7 +18,7 @@ import { cpus, setPriority } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  findChrome, chromeFlags, ffmpegPath, CAN_PIN_CPUS, dataDir,
+  findChrome, chromeFlags, ffmpegPath, CAN_PIN_CPUS, dataDir, hasZscale, rmTree,
   availableMb, listBrowsers as psBrowsers, killTree, spawnOpts,
 } from './platform.mjs';
 
@@ -122,7 +122,7 @@ export async function reapBrowsers({ frames = false } = {}) {
      swept when the caller knows there is no such job. */
   const junk = frames ? /^(dcrec|dcframes|dcloop)-/ : /^dcrec-/;
   for (const name of await readdir(WORK).catch(() => [])) {
-    if (junk.test(name)) await rm(path.join(WORK, name), { recursive: true, force: true });
+    if (junk.test(name)) await rmTree(path.join(WORK, name));
   }
   return killed;
 }
@@ -414,7 +414,7 @@ async function openSession(input, { offline = false, signal, step = false } = {}
     try { cdp.close(); } catch {}
     killTree(chrome.pid);
     statics?.server.close();
-    await rm(profile, { recursive: true, force: true });
+    await rmTree(profile);
   };
   return { cdp, url, load, close };
 }
@@ -592,7 +592,7 @@ export async function detectLoop(input, { tile, offline = false, window: win = 4
     return { loop: null, still: false };
   } finally {
     await session.close();
-    await rm(dir, { recursive: true, force: true });
+    await rmTree(dir);
   }
 }
 
@@ -676,8 +676,16 @@ async function encode(dir, { fps, duration, audio, target, threads = coreBudget(
      gamma, landing the clip 6 to 16 levels off the still beside it while every value in
      the file is "correct". iec61966-2-1 is sRGB, which is what they actually are.
      setparams does the labelling; the -color_trc output option looks like it would and
-     silently leaves it unknown. */
-  args.push('-vf', 'zscale=matrix=709:range=full,setparams=range=pc:colorspace=bt709'
+     silently leaves it unknown.
+     zscale is zimg, and ffmpeg only carries it when built --enable-libzimg — which
+     Homebrew's bottle and the usual Windows builds are not. Its advantage is real but
+     under one level, and a missing filter is not a slightly worse clip, it is no clip
+     at all, so swscale is the fallback rather than a hard requirement. The tagging is
+     identical either way, and the tagging is the part that is visible on a phone. */
+  const convert = hasZscale()
+    ? 'zscale=matrix=709:range=full'
+    : 'scale=in_range=full:out_range=full:in_color_matrix=bt709:out_color_matrix=bt709';
+  args.push('-vf', convert + ',setparams=range=pc:colorspace=bt709'
     + ':color_primaries=bt709:color_trc=iec61966-2-1', '-pix_fmt', 'yuv420p');
   /* Deliberately no -shortest: silence is generated as fast as ffmpeg can ask for it
      while the video encodes in real time, and -shortest makes the muxer hold every
@@ -734,7 +742,7 @@ export async function record(input, opts = {}) {
   } finally {
     await session?.close();
     if (keepFrames) console.log('frames kept in ' + dir);
-    else await rm(dir, { recursive: true, force: true });
+    else await rmTree(dir);
   }
 }
 
@@ -823,8 +831,9 @@ export async function doctor() {
     line(true, 'chrome', `${bin}${isShell ? '' : '  (full browser — headless shell would be leaner)'}`);
   } catch (err) { ready = false; line(false, 'chrome', err.message.split('\n').join('\n        ')); }
 
-  try { line(true, 'ffmpeg', ffmpegPath()); }
-  catch (err) { ready = false; line(false, 'ffmpeg', err.message.split('\n').join('\n        ')); }
+  try {
+    line(true, 'ffmpeg', `${ffmpegPath()}${hasZscale() ? '' : '  (no zscale — colour converts via swscale, under a level off)'}`);
+  } catch (err) { ready = false; line(false, 'ffmpeg', err.message.split('\n').join('\n        ')); }
 
   console.log(`\nworkers   ${autoWorkers()} (${coreBudget()} cores usable, ${(availableMb() / 1024).toFixed(1)}GB free)`);
   console.log(`data      ${dataDir()}`);

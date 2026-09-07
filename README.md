@@ -152,10 +152,11 @@ whatever the design says — with no cropping and no scaling.
 
 **The colours match the still.** A video and a PNG of the same slide sit next to each
 other in a carousel, and a swipe between them shows any step. Getting them to agree
-took measuring: full range rather than ffmpeg's default squeeze into 16–235, zscale
-rather than swscale for the RGB→YUV conversion, and — the one that is actually
-visible on a phone — tagging the transfer as `iec61966-2-1` (sRGB) rather than
-`bt709`. Browser frames *are* sRGB; asking a colour-managed viewer to decode them on
+took measuring: full range rather than ffmpeg's default squeeze into 16–235, zimg
+rather than swscale for the RGB→YUV conversion where your ffmpeg has it (0.56 against
+1.17 levels of mean error — it falls back cleanly when it does not, which Homebrew's
+build does not), and — the one that is actually visible on a phone — tagging the
+transfer as `iec61966-2-1` (sRGB) rather than `bt709`. Browser frames *are* sRGB; asking a colour-managed viewer to decode them on
 bt709's curve lands the clip 6–16 levels off the still beside it while every value in
 the file is "correct".
 
